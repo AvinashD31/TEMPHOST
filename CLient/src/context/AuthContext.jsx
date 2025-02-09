@@ -76,11 +76,12 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     try {
       console.log('Starting login process...');
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Important for cookies in production
         body: JSON.stringify({ email, password }),
       });
 
@@ -136,12 +137,13 @@ export function AuthProvider({ children }) {
       const token = sessionStorage.getItem('authToken');
       if (!token || !user) throw new Error('Not authenticated');
 
-      const response = await fetch(`/api/users/${user.id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${user.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Important for cookies in production
         body: JSON.stringify(userData),
       });
 
