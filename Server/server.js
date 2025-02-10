@@ -17,10 +17,19 @@ const app = express();
 // Connect to Database
 connectDB();
 
-// Middleware
-app.use(cors());
+// Add the correct CORS configuration here, before any routes
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:5173", // Remove trailing slash
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Other middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser()); // Make sure cookie-parser is used
+
 //Routes
 app.use('/api', routes);
 app.use('/api', require('./routes/product'));
@@ -76,11 +85,4 @@ app.listen(PORT, () => {
     }
   });
 });
-
-app.use(cors({
-  origin: process.env.VITE_BASE_URL , // Your Vite frontend URL
-  credentials: true, // Important for cookies/credentials
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
 
