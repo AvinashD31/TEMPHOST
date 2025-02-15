@@ -11,6 +11,13 @@ const loginLimiter = rateLimit({
   max: 5 // limit each IP to 5 requests per windowMs
 });
 
+// Debug middleware specific to auth routes
+router.use((req, res, next) => {
+  console.log('Auth Route:', req.method, req.path);
+  console.log('Headers:', req.headers);
+  next();
+});
+
 // Login route
 router.post('/login', loginLimiter, async (req, res) => {
   try {
@@ -77,34 +84,43 @@ router.post('/login', loginLimiter, async (req, res) => {
 
 router.get('/profile', auth, async (req, res) => {
   try {
+    console.log('Profile request received');
+    console.log('User from token:', req.user);
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store');
+
     const user = await User.findById(req.user.id).select('-password');
     
-    // Debug log to see what's being sent
-    console.log('Server sending user data:', {
-      _id: user._id,
-      email: user.email,
-      role: user.role,
-      fullUser: user.toObject()
-    });
-
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      console.log('User not found in database');
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
     }
 
-    // Explicitly structure the response
+    console.log('Sending user profile response');
     const userResponse = {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      mobile:user.mobile,  // Make sure role is included
-      addresses: user.addresses || []
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        mobile: user.mobile,
+        addresses: user.addresses || []
+      }
     };
 
-    res.json(userResponse);
+    return res.json(userResponse);
   } catch (error) {
     console.error('Profile fetch error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ 
+      success: false,
+      message: 'Error fetching user profile',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

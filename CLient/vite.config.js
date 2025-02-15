@@ -13,14 +13,13 @@ export default defineConfig(({ mode }) => ({
     }
   },
   server: {
+    port: 5173,
     proxy: {
       '/api': {
-        target: mode === 'production' 
-          ? process.env.VITE_API_URL 
-          : process.env.VITE_API_URL || 'http://localhost:3000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
-        secure: mode === 'production',
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        secure: false,
+        ws: true
       },
     }
   },
