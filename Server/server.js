@@ -5,64 +5,70 @@ const cookieParser = require('cookie-parser');
 const cors = require('cors')
 const connectDB = require('./config/database');
 const routes = require('./routes'); 
-
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('Could not connect to MongoDB:', err));
-
-
-
+const helmet = require('helmet');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
+
 // Connect to Database
 connectDB();
 
 // Add the correct CORS configuration here, before any routes
-app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173", // Remove trailing slash
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.FRONTEND_URL 
+    : ['http://localhost:5173', 'http://127.0.0.1:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+  exposedHeaders: ['set-cookie'],
+  maxAge: 86400, // 24 hours
+};
+
+app.use(cors(corsOptions));
+
+// Add security headers for production
+if (process.env.NODE_ENV === 'production') {
+  app.use(helmet());
+  app.use(compression());
+  
+  // Add rate limiting
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per windowMs
+  });
+  app.use(limiter);
+}
+
+// Logging middleware should be one of the first middleware
+app.use((req, res, next) => {
+  console.log('Incoming request:', req.method, req.path);
+  next();
+});
 
 // Other middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser()); // Make sure cookie-parser is used
-
-//Routes
-app.use('/api', routes);
-app.use('/api', require('./routes/product'));
+app.use(cookieParser());
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const addressRoutes = require('./routes/address');
-const Product = require('./routes/product');
+const productRoutes = require('./routes/product');  // Changed variable name for consistency
 const adminRouter = require('./routes/adminRoutes');
 const returnRoutes = require('./routes/returnRoutes');
 
-// Use routes
+// Mount routes (remove duplicates)
 app.use('/api/auth', authRoutes);
-app.use('/api', userRoutes);  // This will handle /api/users/...
-app.use('/api', orderRoutes);
+app.use('/api', userRoutes);
+app.use('/api', orderRoutes);  // Keep only one instance
 app.use('/api/addresses', addressRoutes);
-app.use('/api', Product);
+app.use('/api', productRoutes);
 app.use('/api/admin', adminRouter);
 app.use('/api', returnRoutes);
-
-// Log to verify route mounting
-console.log('Mounting order routes');
-
-// Add this before your routes
-app.use((req, res, next) => {
-  console.log('Incoming request:', req.method, req.path);
-  next();
-});
-
-// Mount routes
-app.use('/api', orderRoutes);
 
 // Add a test route directly in server.js
 app.get('/api/test-server', (req, res) => {

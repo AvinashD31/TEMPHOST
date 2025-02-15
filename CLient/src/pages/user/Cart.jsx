@@ -14,15 +14,22 @@ export default function Cart() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const DELIVERY_CHARGE = 50; // Define standard delivery charge
-  
+  // Calculate delivery charge based on total number of items
+  const calculateDeliveryCharge = () => {
+    const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+    if (totalItems === 1) return 50;
+    if (totalItems === 2) return 75;
+    return 100; // for 3 or more items
+  };
+
   const subtotal = items.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
     0
   );
 
-  // Calculate final total including delivery charge
-  const total = subtotal + DELIVERY_CHARGE;
+  // Calculate final total with variable delivery charge
+  const deliveryCharge = calculateDeliveryCharge();
+  const total = subtotal + deliveryCharge;
 
   if (items.length === 0) {
     return (
@@ -227,7 +234,7 @@ export default function Cart() {
                   </div>
                   <div className="flex justify-between">
                     <span>Delivery</span>
-                    <span>Rs:{DELIVERY_CHARGE.toFixed(2)}</span>
+                    <span>Rs:{deliveryCharge.toFixed(2)}</span>
                   </div>
                   <div className="border-t pt-4 flex justify-between font-medium">
                     <span>Total</span>

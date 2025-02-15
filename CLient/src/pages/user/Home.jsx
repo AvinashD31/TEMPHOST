@@ -245,12 +245,13 @@ export default function Home() {
             Our Story
           </h2>
           <p className="text-gray-700 text-lg leading-relaxed text-center">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed vitae elit libero. Phasellus scelerisque, 
-            nunc id efficitur sagittis, neque orci dictum nisi, et pulvinar sem mauris id lectus. Vestibulum ante 
-            ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Proin dignissim ligula eu elit 
-            tempus, vitae accumsan nulla facilisis. Maecenas euismod consectetur nunc, in tincidunt nulla sollicitudin vel. 
-            Nullam feugiat, nunc in eleifend cursus, nibh enim sollicitudin justo, in semper lectus nunc vitae magna. 
-            Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+          At Sector 91, we believe that great style shouldn’t cost you an arm and a leg.
+          We know there’s a common idea that higher prices mean better quality, but we’re here to challenge that.
+          Our mission is simple: to offer stylish, high-quality clothing at prices everyone can afford.
+          Sector 91 was born out of the frustration that many people feel when they have to choose between looking good and spending too much. 
+          We wanted to create a brand that proves you don’t need to break the bank to wear well-made, fashionable clothes.
+          Every piece we design is carefully crafted to offer both style and durability without the inflated prices that you often find in high-end stores.
+    
           </p>
         </div>
 

@@ -2,7 +2,7 @@ import path from "path"
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   optimizeDeps: {
     exclude: ['lucide-react'],
@@ -15,10 +15,24 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3000', // Replace with your backend URL
+        target: mode === 'production' 
+          ? process.env.VITE_API_URL 
+          : process.env.VITE_API_URL || 'http://localhost:3000',
         changeOrigin: true,
-        secure: false,
+        secure: mode === 'production',
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    }
+  },
+  build: {
+    sourcemap: mode === 'development',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+        },
       },
     },
+    chunkSizeWarningLimit: 1000,
   },
-});
+}));

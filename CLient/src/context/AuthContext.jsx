@@ -75,22 +75,28 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      console.log('Starting login process...');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // Important for cookies in production
+        credentials: 'include',
         body: JSON.stringify({ email, password }),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Login failed');
+      }
 
       const data = await response.json();
       console.log('Login response:', data);
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
-      }
 
       // Store sensitive data in sessionStorage
       if (data.token) {
@@ -117,7 +123,9 @@ export function AuthProvider({ children }) {
       
       return { token: data.token, user: normalizedUser };
     } catch (error) {
-      console.error('Login error:', error);
+      if (error.name === 'AbortError') {
+        throw new Error('Login request timed out');
+      }
       throw error;
     }
   };
