@@ -1,6 +1,6 @@
 const BASE_URL = import.meta.env.MODE === 'production' 
-  ? 'https://temphost-backend-dml6.onrender.com/api'  // Production URL
-  : 'http://localhost:3000/api';                      // Development URL
+  ? 'https://temphost-backend-dml6.onrender.com/api'  // Production URL already includes /api
+  : 'http://localhost:3000/api';                      // Development URL already includes /api
 
 // Validate BASE_URL format and log for debugging
 if (!BASE_URL) {
@@ -15,10 +15,10 @@ console.log('API Base URL configured as:', BASE_URL);
 
 // Helper function to ensure endpoint starts with '/'
 const formatEndpoint = (endpoint) => {
-    // Add /api prefix if not present
-    const apiPrefix = endpoint.startsWith('/api/') ? '' : '/api';
-    const formattedPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    return `${apiPrefix}${formattedPath}`;
+    // Remove the /api prefix if present since BASE_URL already includes it
+    endpoint = endpoint.replace(/^\/api\//, '/');
+    // Ensure endpoint starts with /
+    return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 };
 
 export const makeRequest = async (endpoint, options = {}) => {
