@@ -1,4 +1,6 @@
-const BASE_URL = import.meta.env.VITE_API_URL;
+const BASE_URL = import.meta.env.MODE === 'production' 
+  ? 'https://temphost-backend-dml6.onrender.com/api'  // Production URL
+  : 'http://localhost:3000/api';                      // Development URL
 
 // Validate BASE_URL format and log for debugging
 if (!BASE_URL) {
@@ -78,7 +80,10 @@ export const makeRequest = async (endpoint, options = {}) => {
         }
 
         if (!response.ok) {
-            throw new Error(data?.message || `HTTP error! status: ${response.status}`);
+            const errorData = await response.json().catch(() => ({
+                message: response.statusText || 'Something went wrong'
+            }));
+            throw new Error(errorData.message);
         }
 
         return data;
@@ -87,11 +92,9 @@ export const makeRequest = async (endpoint, options = {}) => {
             url,
             error: error.message,
             endpoint: formattedEndpoint,
-            type: error.name,
+            type: error.constructor.name,
             stack: error.stack
         });
-
-        // Rethrow the error with the actual message from the server
         throw error;
     }
 };
