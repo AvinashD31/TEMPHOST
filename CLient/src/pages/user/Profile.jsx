@@ -32,66 +32,70 @@ export default function Profile() {
     }
   }, [user]);
 
+  // Combine the two data fetching useEffects into one to prevent race conditions
   useEffect(() => {
-    const fetchUserData = async () => {
-      if (!user?._id && !user?.id) {
-        setIsLoading(false);
-        return;
-      }
+    const fetchData = async () => {
+      if (!user) return;
+      
+      const userId = user?._id || user?.id;
+      if (!userId) return;
 
       try {
         setIsLoading(true);
-        const userId = user._id || user.id;
-
-        // Use Promise.all with error handling for each request
+        setError(null);
+        
+        // Fetch both user data and orders in parallel
         const [userResponse, ordersResponse] = await Promise.all([
-          makeRequest(`/users/${userId}`).catch(err => {
-            console.error('Error fetching user data:', err);
-            return null;
+          fetch(`/api/users/${userId}`, {
+            headers: {
+              'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+            }
           }),
-          makeRequest(`/users/${userId}/orders`).catch(err => {
-            console.error('Error fetching orders:', err);
-            return null;
+          fetch(`/api/orders?userId=${userId}`, {
+            headers: {
+              'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+            }
           })
         ]);
 
-        if (userResponse) {
-          setUserData(userResponse);
-          // Update addresses if available in user response
-          if (userResponse.addresses) {
-            setAddresses(userResponse.addresses);
-          }
+        if (!userResponse.ok) {
+          throw new Error(`HTTP error! status: ${userResponse.status}`);
         }
 
-        if (ordersResponse) {
-          setOrders(ordersResponse);
+        const userData = await userResponse.json();
+        const ordersData = await ordersResponse.json();
+
+        setUserData(userData);
+        dispatch(setUser(userData));
+        setOrders(ordersData);
+        
+        // Handle addresses
+        if (userData.address) {
+          const addressList = Array.isArray(userData.address) ? userData.address : [userData.address];
+          const validAddresses = addressList.filter(addr => 
+            addr && 
+            typeof addr === 'object' &&
+            Object.keys(addr).length > 0
+          );
+          setAddresses(validAddresses);
+        } else {
+          setAddresses([]);
         }
 
       } catch (error) {
-        console.error("Error fetching data:", error);
-        setError(error.message || "Failed to load profile data");
-        showToast(error.message || "Failed to load profile data");
+        console.error('Error fetching data:', error);
+        setError(error.message);
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (!loading) {
-      fetchUserData();
-    }
-  }, [user, loading, showToast]);
+    fetchData();
+  }, [user, dispatch]);
 
-  // Early return for loading state
-  if (loading || isLoading) {
-    return <Loader />;
-  }
-
-  // Early return for unauthorized access
-  if (!user && !loading) {
-    return <Navigate to="/auth/login" replace />;
-  }
-
-  // Early return for error state
+  // Early returns
+  if (loading || isLoading) return <Loader />;
+  if (!user && !loading) return <Navigate to="/auth/login" replace />;
   if (error) {
     return (
       <div className="pt-24 px-4 text-center">
@@ -106,22 +110,43 @@ export default function Profile() {
     );
   }
 
-  const handleAddressChange = (e) => {
-    const { name, value } = e.target;
+  const handleMobileChange = (e) => {
+    const newMobile = e.target.value;
+    setMobile(newMobile);
     setUserData(prev => ({
       ...prev,
-      address: {
-        ...prev.address,
-        [name]: value
-      }
+      mobile: newMobile
     }));
   };
 
-  const handleMobileChange = (e) => {
-    setUserData(prev => ({
-      ...prev,
-      mobile: e.target.value
-    }));
+  const handleMobileSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const userId = user?._id || user?.id;
+      if (!userId) throw new Error('User ID not found');
+
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({ mobile: mobile })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update mobile number');
+      }
+
+      const updatedUser = await response.json();
+      setUserData(updatedUser);
+      dispatch(setUser(updatedUser));
+      setIsEditingMobile(false);
+      showToast('Mobile number updated successfully');
+    } catch (error) {
+      console.error('Error updating mobile number:', error);
+      showToast(error.message);
+    }
   };
 
   const handleAddressSubmit = async (e) => {
@@ -152,7 +177,7 @@ export default function Profile() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
         },
-        body: JSON.stringify({ address: updatedAddresses }),
+        body: JSON.stringify({ addresses: updatedAddresses })
       });
 
       if (!response.ok) {
@@ -161,41 +186,15 @@ export default function Profile() {
 
       const result = await response.json();
       setAddresses(updatedAddresses);
+      setUserData(prev => ({
+        ...prev,
+        addresses: updatedAddresses
+      }));
       setIsAddingNewAddress(false);
       showToast('Address added successfully');
       e.target.reset();
     } catch (error) {
       console.error('Error updating address:', error);
-      showToast(error.message);
-    }
-  };
-
-  const handleMobileSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const userId = user?._id || user?.id;
-      if (!userId) throw new Error('User ID not found');
-
-      const response = await fetch(`/api/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
-        },
-        body: JSON.stringify({ mobile: userData?.mobile })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update mobile number');
-      }
-
-      const updatedUser = await response.json();
-      setUserData(updatedUser);
-      dispatch(setUser(updatedUser));
-      setIsEditingMobile(false);
-      showToast('Mobile number updated successfully');
-    } catch (error) {
-      console.error('Error updating mobile number:', error);
       showToast(error.message);
     }
   };
