@@ -7,7 +7,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { setUser } from '../../store/auth';
 import { Link } from 'react-router-dom';
 import Loader from '../../components/loader/Loader';
-import { makeRequest } from '../../config/apiConfig';  // Adjust the path based on your file structure
+import { makeRequest } from '../../config/apiconfig';  // Adjust the path based on your file structure
 
 
 export default function Profile() {
