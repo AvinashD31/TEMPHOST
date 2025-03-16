@@ -7,8 +7,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { setUser } from '../../store/auth';
 import { Link } from 'react-router-dom';
 import Loader from '../../components/loader/Loader';
-import { makeRequest } from '../../config/apiconfig';  // Adjust the path based on your file structure
-
+import { makeRequest } from '../../config/apiconfig';
 
 export default function Profile() {
   const [activeTab, setActiveTab] = useState('profile');
@@ -22,22 +21,89 @@ export default function Profile() {
   const { user, loading } = useAuth();
   const [addresses, setAddresses] = useState([]);
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
-  const [mobile,setMobile]= useState(user.mobile)
+  const [mobile, setMobile] = useState('');
   const dispatch = useDispatch();
   const authUser = useSelector(state => state.auth.user);
 
-
-  console.log(userData,'b');
-  
+  // Initialize mobile when user data is available
   useEffect(() => {
-    console.log('Profile component mounted');
-    console.log('Current user:', user);
-    console.log('Current loading state:', loading);
-  }, [user, loading]);
+    if (user?.mobile) {
+      setMobile(user.mobile);
+    }
+  }, [user]);
 
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user?._id && !user?.id) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const userId = user._id || user.id;
+
+        // Use Promise.all with error handling for each request
+        const [userResponse, ordersResponse] = await Promise.all([
+          makeRequest(`/users/${userId}`).catch(err => {
+            console.error('Error fetching user data:', err);
+            return null;
+          }),
+          makeRequest(`/users/${userId}/orders`).catch(err => {
+            console.error('Error fetching orders:', err);
+            return null;
+          })
+        ]);
+
+        if (userResponse) {
+          setUserData(userResponse);
+          // Update addresses if available in user response
+          if (userResponse.addresses) {
+            setAddresses(userResponse.addresses);
+          }
+        }
+
+        if (ordersResponse) {
+          setOrders(ordersResponse);
+        }
+
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        setError(error.message || "Failed to load profile data");
+        showToast(error.message || "Failed to load profile data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (!loading) {
+      fetchUserData();
+    }
+  }, [user, loading, showToast]);
+
+  // Early return for loading state
+  if (loading || isLoading) {
+    return <Loader />;
+  }
+
+  // Early return for unauthorized access
   if (!user && !loading) {
-    console.log('No user found, redirecting...');
     return <Navigate to="/auth/login" replace />;
+  }
+
+  // Early return for error state
+  if (error) {
+    return (
+      <div className="pt-24 px-4 text-center">
+        <p className="text-red-500">Error: {error}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="mt-4 bg-black text-white px-4 py-2 rounded"
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   const handleAddressChange = (e) => {
@@ -52,7 +118,6 @@ export default function Profile() {
   };
 
   const handleMobileChange = (e) => {
-
     setUserData(prev => ({
       ...prev,
       mobile: e.target.value
@@ -135,90 +200,8 @@ export default function Profile() {
     }
   };
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (!user?.id) return;
-
-      try {
-        setIsLoading(true);
-        const [userResponse, ordersResponse] = await Promise.all([
-          makeRequest(`/users/${user.id}`),
-          makeRequest(`/users/${user.id}/orders`)
-        ]);
-
-        if (userResponse) {
-          setUserData(userResponse);
-        }
-        if (ordersResponse) {
-          setOrders(ordersResponse);
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        if (error.message.includes('404')) {
-          setError("User data not found. Please try logging in again.");
-        } else {
-          setError("Failed to load profile data. Please try again later.");
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUserData();
-  }, [user, dispatch]);
-
-  useEffect(() => {
-    const fetchUserOrders = async () => {
-      if (!user) return;
-
-      const userId = user?._id || user?.id;
-      if (!userId) return;
-
-      try {
-        setIsLoading(true);
-        const response = await fetch(`/api/orders?userId=${userId}`, {
-          headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
-          }
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to fetch orders');
-        }
-        
-        const data = await response.json();
-        setOrders(data);
-      } catch (error) {
-        console.error('Error fetching orders:', error);
-        setError(error.message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUserOrders();
-  }, [user]);
-
-  if (loading) {
-    return <div className="pt-24 px-4">Loading...</div>;
-  }
-
-  if (!user) {
-    return <div className="pt-24 px-4">Please log in to view your profile.</div>;
-  }
-
-  if (isLoading) {
-    return <div className="pt-24 px-4">Loading profile data...</div>;
-  }
-
-  if (error) {
-    return <div className="pt-24 px-4 text-red-500">Error: {error}</div>;
-  }
-
   return (
     <>
-      {isLoading && <Loader />}
       <div className="pt-24 px-4 max-w-7xl mx-auto pb-16">
         <h1 className="text-3xl font-semibold mb-8 text-gray-900">My Account</h1>
 
