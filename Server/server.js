@@ -41,9 +41,10 @@ if (process.env.NODE_ENV === 'production') {
 app.use((req, res, next) => {
   console.log('Incoming request:', {
     method: req.method,
+    url: req.url,
     path: req.path,
-    headers: req.headers,
-    body: req.body
+    baseUrl: req.baseUrl,
+    originalUrl: req.originalUrl
   });
   next();
 });

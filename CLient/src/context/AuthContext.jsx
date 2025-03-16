@@ -39,17 +39,42 @@ export function AuthProvider({ children }) {
       const existingUserData = localStorage.getItem('userData');
       const parsedExistingData = existingUserData ? JSON.parse(existingUserData) : null;
 
-      // Decode the JWT token to get user data including role
-      const decodedToken = JSON.parse(atob(token.split('.')[1]));
+      // Safely decode the JWT token
+      let decodedToken;
+      try {
+        const base64Url = token.split('.')[1];
+        if (!base64Url) throw new Error('Invalid token format');
+        
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        decodedToken = JSON.parse(jsonPayload);
+        
+        if (!decodedToken.id && !decodedToken.sub) {
+          throw new Error('Invalid token payload');
+        }
+      } catch (tokenError) {
+        console.error('Token decode failed:', tokenError);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
       console.log('Decoded token:', decodedToken);
 
       // Merge existing data with token data, preferring existing data for certain fields
       const userData = {
         id: decodedToken.id || decodedToken.sub,
         email: decodedToken.email,
-        name: parsedExistingData?.name || decodedToken.name, // Preserve existing name
+        name: parsedExistingData?.name || decodedToken.name,
         role: decodedToken.role,
-        mobile: parsedExistingData?.mobile || decodedToken.mobile, // Preserve existing mobile
+        mobile: parsedExistingData?.mobile || decodedToken.mobile,
+        address: parsedExistingData?.address || decodedToken.address,
+        orders: parsedExistingData?.orders || decodedToken.orders,
         // Add other non-sensitive fields as needed
       };
 
@@ -113,6 +138,8 @@ export function AuthProvider({ children }) {
         name: data.user.name,
         role: data.user.role || 'user',
         mobile: data.user.mobile,
+        address: data.user.address,
+        orders: data.user.orders,
         // Add other non-sensitive fields as needed
       };
       

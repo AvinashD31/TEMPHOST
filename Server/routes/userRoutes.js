@@ -7,7 +7,6 @@ const mongoose = require('mongoose');
 // Get user by ID
 router.get('/users/:id', async (req, res) => {
   try {
-    
     const user = await User.findById(req.params.id).select('-password'); // Exclude password
     
     if (!user) {
@@ -22,7 +21,7 @@ router.get('/users/:id', async (req, res) => {
 });
 
 // Update user
-router.put('/users/:id', async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { name, email, mobile } = req.body;
     
@@ -44,19 +43,38 @@ router.put('/users/:id', async (req, res) => {
 });
 
 // Get user orders
-router.get('/orders', async (req, res) => {
+router.get('/users/:userId/orders', async (req, res) => {
   try {
-    const { userId } = req.query;
-    const orders = await Order.find({ userId }).sort({ date: -1 });
+    const { userId } = req.params;
+    
+    // Validate userId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+
+    const orders = await Order.find({ userId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({ 
+        message: 'No orders found for this user',
+        userId: userId
+      });
+    }
+
     res.json(orders);
   } catch (error) {
     console.error('Error fetching orders:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ 
+      message: 'Server error',
+      error: error.message 
+    });
   }
 });
 
 // Update user address and mobile
-router.put('/users/:userId/address', async (req, res) => {
+router.put('/:userId/address', async (req, res) => {
   try {
     const { userId } = req.params;
     const { address, mobile } = req.body;

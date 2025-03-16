@@ -7,6 +7,8 @@ import { useSelector, useDispatch } from 'react-redux';
 import { setUser } from '../../store/auth';
 import { Link } from 'react-router-dom';
 import Loader from '../../components/loader/Loader';
+import { makeRequest } from '../../config/apiConfig';  // Adjust the path based on your file structure
+
 
 export default function Profile() {
   const [activeTab, setActiveTab] = useState('profile');
@@ -133,112 +135,69 @@ export default function Profile() {
     }
   };
 
-  const fetchUserData = async () => {
-    try {
-      const token = sessionStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      console.log('Making request to /api/auth/profile with token:', token.substring(0, 20) + '...');
-      
-      const response = await fetch('/api/auth/profile', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
-
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries([...response.headers]));
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Received data:', data);
-      return data;
-    } catch (error) {
-      console.error('Fetch error:', error);
-      if (error.message.includes('Failed to fetch')) {
-        throw new Error('Could not connect to server. Please check your connection.');
-      }
-      throw error;
-    }
-  };
-
   useEffect(() => {
-    const loadUserData = async () => {
+    const fetchUserData = async () => {
+      if (!user?.id) return;
+
       try {
         setIsLoading(true);
-        const userData = await fetchUserData();
-        setUserData(userData);
-        dispatch(setUser(userData));
-        
-        if (userData.address) {
-          const addressList = Array.isArray(userData.address) ? userData.address : [userData.address];
-          const validAddresses = addressList.filter(addr => 
-            addr && 
-            typeof addr === 'object' &&
-            Object.keys(addr).length > 0
-          );
-          setAddresses(validAddresses);
-        } else {
-          setAddresses([]);
+        const [userResponse, ordersResponse] = await Promise.all([
+          makeRequest(`/users/${user.id}`),
+          makeRequest(`/users/${user.id}/orders`)
+        ]);
+
+        if (userResponse) {
+          setUserData(userResponse);
+        }
+        if (ordersResponse) {
+          setOrders(ordersResponse);
         }
       } catch (error) {
-        setError(error.message);
-        console.error('Error loading user data:', error);
+        console.error("Error fetching data:", error);
+        if (error.message.includes('404')) {
+          setError("User data not found. Please try logging in again.");
+        } else {
+          setError("Failed to load profile data. Please try again later.");
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadUserData();
+    fetchUserData();
   }, [user, dispatch]);
 
   useEffect(() => {
-    const fetchOrders = async (userId) => {
+    const fetchUserOrders = async () => {
+      if (!user) return;
+
+      const userId = user?._id || user?.id;
+      if (!userId) return;
+
       try {
-        const token = sessionStorage.getItem('authToken');
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
-
-        const response = await fetch(`/api/orders/user/${userId}`, {
-          method: 'GET',
+        setIsLoading(true);
+        const response = await fetch(`/api/orders?userId=${userId}`, {
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
+            'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+          }
         });
-
+        
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Orders error response:', errorText);
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to fetch orders');
         }
-
-        return await response.json();
+        
+        const data = await response.json();
+        setOrders(data);
       } catch (error) {
         console.error('Error fetching orders:', error);
-        throw error;
+        setError(error.message);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    if (user) {
-      fetchOrders(user._id || user.id).then(data => {
-        setOrders(data);
-      });
-    }
+    fetchUserOrders();
   }, [user]);
 
   if (loading) {
