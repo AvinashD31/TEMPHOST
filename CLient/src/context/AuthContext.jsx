@@ -1,20 +1,58 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 
 export const AuthContext = createContext();
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const userData = localStorage.getItem('userData');
-      return userData ? JSON.parse(userData) : null;
-    } catch (error) {
-      console.error('Error parsing stored user:', error);
-      return null;
-    }
-  });
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('userData') || '{}');
+      const token = sessionStorage.getItem('authToken');
+
+      if (token && storedUser) {
+        // Fetch fresh user data from the server
+        const response = await makeRequest(`/users/${storedUser._id || storedUser.id}`);
+        
+        if (response) {
+          // Update user state with complete user data including mobile
+          setUser(response);
+          // Update localStorage with fresh data
+          localStorage.setItem('userData', JSON.stringify(response));
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing user:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initialize auth state
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        const storedUser = JSON.parse(localStorage.getItem('userData') || '{}');
+        const token = sessionStorage.getItem('authToken');
+
+        if (token && storedUser) {
+          // Set initial user state from localStorage
+          setUser(storedUser);
+          // Refresh user data from server
+          await refreshUser();
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, [refreshUser]);
 
   // Add debug logging to track auth state
   useEffect(() => {
@@ -206,6 +244,7 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     loading,
+    refreshUser,
     login,
     logout,
     updateUserProfile,
@@ -219,7 +258,7 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
 export const useAuth = () => {
   const context = useContext(AuthContext);

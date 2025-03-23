@@ -7,7 +7,7 @@ if (!BASE_URL) {
     throw new Error('VITE_API_URL is not set in environment variables');
 }
 
-if (BASE_URL.includes('temphost-client.onrender.com' || 'localhost')) {
+if (BASE_URL.includes('onrender.com' || 'localhost')) {
     throw new Error('VITE_API_URL is incorrectly set to the client URL instead of the backend API URL');
 }
 
@@ -57,7 +57,7 @@ export const makeRequest = async (endpoint, options = {}) => {
         });
 
         const text = await response.text();
-        console.log('Raw response:', text);
+        
 
         // Check if response is HTML (indicating an error page)
         if (text.trim().startsWith('<!DOCTYPE html>')) {

@@ -15,18 +15,23 @@ export default function Payment() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const DELIVERY_CHARGE = 50; // Add delivery charge constant
-  
-  // Convert address array into an object
-  const addressObject = Object.entries(address);
-  // Merge addressObject and userData into one object
-  const mergedData = { ...address, ...user };
+  // Log the incoming data
+  console.log('Payment component - User:', user);
+  console.log('Payment component - Address:', address);
 
-  console.log(mergedData,);
+  // Update mergedData to check for both phone and mobile
+  const mergedData = {
+    ...address,
+    phone: user?.phone || user?.mobile || address?.phone || address?.mobile || '', // Check all possible fields
+    name: user?.name || ''
+  };
+
+  // Log the merged data
+  console.log('Payment component - Merged data:', mergedData);
   
   // Update total calculation to include delivery charge
   const subtotal = items?.reduce((sum, item) => sum + (item.product.price * item.quantity), 0) || 0;
-  const total = subtotal + DELIVERY_CHARGE;
+  const total = subtotal + 50; // Assuming a default delivery charge
 
   const handlePayment = async () => {
     setIsLoading(true);
@@ -42,14 +47,14 @@ export default function Payment() {
       // Initialize Razorpay options
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-        amount: total * 100, // Now includes delivery charge
+        amount: total * 100,
         currency: "INR",
         name: "Sector 91",
         description: "Payment for your order",
         prefill: {
           name: user.name || "",
           email: user.email || "",
-          contact: user.mobile || ""
+          contact: user.phone || user.mobile || "" // Check for both phone and mobile
         },
         theme: {
           color: "#000000"
@@ -146,11 +151,11 @@ export default function Payment() {
         <div className="mb-8">
           <h2 className="text-lg font-medium mb-4">Shipping Address</h2>
           <div className="border p-4 rounded-lg">
-            <p className="font-medium">{address.name}</p>
-            <p>{address.houseNo}, {address.street}</p>
-            <p>{address.locality}</p>
-            <p>{address.city}, {address.state} {address.postalCode}</p>
-            <p>Phone: {mergedData.mobile}</p>
+            <p className="font-medium">{mergedData.name}</p>
+            <p>{mergedData.houseNo}, {mergedData.street}</p>
+            <p>{mergedData.locality}</p>
+            <p>{mergedData.city}, {mergedData.state} {mergedData.postalCode}</p>
+            <p className="mt-2">Phone: {mergedData.phone || 'Not provided'}</p>
           </div>
         </div>
 
@@ -176,7 +181,7 @@ export default function Payment() {
               </div>
               <div className="flex justify-between">
                 <p>Delivery</p>
-                <p>₹{DELIVERY_CHARGE}</p>
+                <p>₹{50}</p>
               </div>
               <div className="flex justify-between font-medium pt-2 border-t">
                 <p>Total Amount</p>

@@ -3,6 +3,7 @@ import { useCartStore } from '../../store/useCartStore';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToastStore } from '../../store/useToastStore';
+import { makeRequest } from '../../config/apiconfig';
 
 export default function AddressSelection() {
   const { user, refreshUser } = useAuth();
@@ -14,14 +15,7 @@ export default function AddressSelection() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('saved');
 
-  // Redirect if not logged in
-  useEffect(() => {
-    if (!user && !loading) {
-      navigate('/auth/login');
-    }
-  }, [user, loading, navigate]);
-
-  // Fetch addresses when component mounts
+  // Update the fetch addresses useEffect
   useEffect(() => {
     const fetchAddresses = async () => {
       if (!user) {
@@ -30,18 +24,10 @@ export default function AddressSelection() {
       }
 
       try {
-        const token = sessionStorage.getItem('authToken');
-        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-        
-        // Always fetch fresh address data from the API
-        const response = await fetch(`${baseUrl}/api/users/${user.id}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const userId = user._id || user.id;
+        const userData = await makeRequest(`/users/${userId}`);
 
-        if (response.ok) {
-          const userData = await response.json();
+        if (userData) {
           console.log('Fetched user data:', userData);
 
           if (userData.address) {
@@ -58,9 +44,6 @@ export default function AddressSelection() {
           } else {
             setAddresses([]);
           }
-        } else {
-          console.error('Failed to fetch user data');
-          setAddresses([]);
         }
       } catch (error) {
         console.error('Error in fetchAddresses:', error);
@@ -74,18 +57,18 @@ export default function AddressSelection() {
     fetchAddresses();
   }, [user, showToast]);
 
+  // Update the redirect useEffect
+  useEffect(() => {
+    if (!user && !loading) {
+      navigate('/auth/login');
+    }
+  }, [user, loading, navigate]);
+
   const handleSaveAddress = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     
     try {
-      const token = sessionStorage.getItem('authToken');
-      if (!token) {
-        showToast('Please login to save address');
-        navigate('/auth/login');
-        return;
-      }
-
       const userId = user?._id || user?.id;
       if (!userId) {
         showToast('User information not found');
@@ -109,33 +92,20 @@ export default function AddressSelection() {
       const updatedAddresses = [...currentAddresses, newAddressData];
       console.log('Updating with addresses:', updatedAddresses);
 
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const apiUrl = `${baseUrl}/api/users/${userId}/address`;
-      
-      const response = await fetch(apiUrl, {
+      const result = await makeRequest(`/${userId}/address`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify({ address: updatedAddresses })
       });
 
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error('Save address error response:', errorData);
-        throw new Error(errorData || 'Failed to save address');
+      if (result) {
+        // Update local state with the response from server
+        const addressList = result.address || result.addresses || updatedAddresses;
+        setAddresses(addressList);
+        setSelectedAddress(newAddressData);
+        showToast('Address saved successfully!');
+        setActiveTab('saved');
+        e.target.reset();
       }
-
-      const result = await response.json();
-      console.log('Save address success:', result);
-
-      // Update local state with all addresses
-      setAddresses(updatedAddresses);
-      setSelectedAddress(newAddressData);
-      showToast('Address saved successfully!');
-      setActiveTab('saved');
-      e.target.reset();
 
     } catch (error) {
       console.error('Error saving address:', error);
@@ -148,7 +118,25 @@ export default function AddressSelection() {
       showToast('Please select an address to proceed');
       return;
     }
-    navigate('/user/payment', { state: { address: selectedAddress, items } });
+
+    // Log the data to see what we're working with
+    console.log('User data:', user);
+    console.log('Selected address:', selectedAddress);
+
+    const addressWithPhone = {
+      ...selectedAddress,
+      phone: user?.phone || user?.mobile || '', // Check for both phone and mobile
+      name: user?.name || ''
+    };
+
+    console.log('Address with phone:', addressWithPhone);
+
+    navigate('/user/payment', { 
+      state: { 
+        address: addressWithPhone, 
+        items 
+      }
+    });
   };
 
   // Debug logging to check user and token
@@ -194,16 +182,16 @@ export default function AddressSelection() {
 
   return (
     <div className="pt-24 px-4 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-light mb-8">Select Delivery Address</h1>
+      <h1 className="text-2xl font-semibold mb-8">Select Delivery Address</h1>
 
       {/* Address Selection Tabs */}
-      <div className="border-b mb-8">
+      <div className="border-b border-gray-200 mb-8">
         <div className="flex space-x-8">
           <button
             onClick={() => setActiveTab('saved')}
-            className={`pb-4 ${
+            className={`pb-4 relative ${
               activeTab === 'saved'
-                ? 'border-b-2 border-black'
+                ? 'text-black border-b-2 border-black'
                 : 'text-gray-500 hover:text-black'
             }`}
           >
@@ -211,9 +199,9 @@ export default function AddressSelection() {
           </button>
           <button
             onClick={() => setActiveTab('new')}
-            className={`pb-4 ${
+            className={`pb-4 relative ${
               activeTab === 'new'
-                ? 'border-b-2 border-black'
+                ? 'text-black border-b-2 border-black'
                 : 'text-gray-500 hover:text-black'
             }`}
           >
@@ -222,69 +210,39 @@ export default function AddressSelection() {
         </div>
       </div>
 
-      {/* Saved Addresses Tab */}
+      {/* Address List */}
       {activeTab === 'saved' && (
         <div className="space-y-4">
           {addresses.length > 0 ? (
-            <>
-              {addresses.map((address, index) => (
-                <div
-                  key={index}
-                  className={`p-4 border ${
-                    selectedAddress === address ? 'border-black' : 'border-gray-200'
-                  } cursor-pointer`}
-                  onClick={() => setSelectedAddress(address)}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      {/* Get user data from localStorage if not available in context */}
-                      <p className="font-medium">
-                        {user?.name || JSON.parse(localStorage.getItem('userData'))?.name || 'User'}
-                      </p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {address.houseNo && `${address.houseNo}, `}
-                        {address.street}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {address.locality && `${address.locality}, `}
-                        {address.city}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {address.state} {address.postalCode && `- ${address.postalCode}`}
-                      </p>
-                      {address.country && (
-                        <p className="text-sm text-gray-600">{address.country}</p>
-                      )}
-                      <p className="text-sm text-gray-600 mt-1">
-                        Mobile: {user?.mobile || JSON.parse(localStorage.getItem('userData'))?.mobile || 'N/A'}
-                      </p>
+            addresses.map((address, index) => (
+              <div
+                key={index}
+                onClick={() => setSelectedAddress(address)}
+                className={`p-6 border rounded-xl cursor-pointer transition-all ${
+                  selectedAddress === address
+                    ? 'border-black bg-gray-50'
+                    : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+                }`}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <p className="font-medium">{user.name || 'Delivery Address'}</p>
+                    <div className="text-gray-600">
+                      <p>{address.houseNo && `${address.houseNo}, `}{address.street}</p>
+                      <p>{address.locality && `${address.locality}, `}{address.city}</p>
+                      <p>{address.state} {address.postalCode && `- ${address.postalCode}`}</p>
+                      {address.country && <p>{address.country}</p>}
                     </div>
-                    <input
-                      type="radio"
-                      checked={selectedAddress === address}
-                      onChange={() => setSelectedAddress(address)}
-                      className="mt-1"
-                    />
                   </div>
                 </div>
-              ))}
-              {/* Continue button */}
-              <div className="mt-8">
-                <button
-                  onClick={handleProceedToPayment}
-                  disabled={!selectedAddress}
-                  className="w-full md:w-auto bg-black text-white px-8 py-3 disabled:bg-gray-300"
-                >
-                  Continue
-                </button>
               </div>
-            </>
+            ))
           ) : (
-            <div className="text-center py-8">
+            <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
               <p className="text-gray-500 mb-4">No saved addresses found.</p>
               <button
                 onClick={() => setActiveTab('new')}
-                className="bg-black text-white px-6 py-2 hover:bg-gray-800 transition-colors"
+                className="bg-black text-white px-6 py-2.5 rounded-lg hover:bg-gray-800 transition-colors"
               >
                 Add New Address
               </button>
@@ -293,83 +251,101 @@ export default function AddressSelection() {
         </div>
       )}
 
-      {/* New Address Form */}
+      {/* Add New Address Form */}
       {activeTab === 'new' && (
-        <form onSubmit={handleSaveAddress} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm text-gray-600 mb-2">House/Flat No.</label>
-              <input
-                type="text"
-                name="houseNo"
-                required
-                className="w-full p-2 border border-gray-200 focus:outline-none focus:border-black"
-              />
+        <div className="bg-white rounded-xl">
+          <form onSubmit={handleSaveAddress} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">House/Flat No.</label>
+                <input
+                  type="text"
+                  name="houseNo"
+                  required
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Street</label>
+                <input
+                  type="text"
+                  name="street"
+                  required
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Locality</label>
+                <input
+                  type="text"
+                  name="locality"
+                  required
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">City</label>
+                <input
+                  type="text"
+                  name="city"
+                  required
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">State</label>
+                <input
+                  type="text"
+                  name="state"
+                  required
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Postal Code</label>
+                <input
+                  type="text"
+                  name="postalCode"
+                  required
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Country</label>
+                <input
+                  type="text"
+                  name="country"
+                  required
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/10"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-2">Street</label>
-              <input
-                type="text"
-                name="street"
-                required
-                className="w-full p-2 border border-gray-200 focus:outline-none focus:border-black"
-              />
+            <div className="flex gap-4 pt-4">
+              <button
+                type="submit"
+                className="bg-black text-white px-8 py-3 rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                Save Address
+              </button>
             </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-2">Locality</label>
-              <input
-                type="text"
-                name="locality"
-                required
-                className="w-full p-2 border border-gray-200 focus:outline-none focus:border-black"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-2">City</label>
-              <input
-                type="text"
-                name="city"
-                required
-                className="w-full p-2 border border-gray-200 focus:outline-none focus:border-black"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-2">State</label>
-              <input
-                type="text"
-                name="state"
-                required
-                className="w-full p-2 border border-gray-200 focus:outline-none focus:border-black"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-2">Postal Code</label>
-              <input
-                type="text"
-                name="postalCode"
-                required
-                className="w-full p-2 border border-gray-200 focus:outline-none focus:border-black"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-2">Country</label>
-              <input
-                type="text"
-                name="country"
-                required
-                className="w-full p-2 border border-gray-200 focus:outline-none focus:border-black"
-              />
-            </div>
-          </div>
-          <button
-            type="submit"
-            className="w-full md:w-auto bg-black text-white px-8 py-3"
-          >
-            Save Address
-          </button>
-        </form>
+          </form>
+        </div>
       )}
+
+      {/* Proceed to Payment Button */}
+      <div className="mt-8">
+        <button
+          onClick={handleProceedToPayment}
+          disabled={!selectedAddress}
+          className={`w-full md:w-auto px-8 py-3 rounded-lg transition-colors ${
+            selectedAddress
+              ? 'bg-black text-white hover:bg-gray-800'
+              : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+          }`}
+        >
+          Proceed to Payment
+        </button>
+      </div>
     </div>
   );
 }
-      

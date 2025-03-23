@@ -57,9 +57,13 @@ export default function Profile() {
 
         if (userResponse) {
           setUserData(userResponse);
-          // Update addresses if available in user response
-          if (userResponse.addresses) {
+          // Ensure addresses are properly set from the user response
+          if (userResponse.address && Array.isArray(userResponse.address)) {
+            setAddresses(userResponse.address);
+          } else if (userResponse.addresses && Array.isArray(userResponse.addresses)) {
             setAddresses(userResponse.addresses);
+          } else {
+            setAddresses([]); // Initialize as empty array if no addresses found
           }
         }
 
@@ -118,9 +122,10 @@ export default function Profile() {
   };
 
   const handleMobileChange = (e) => {
+    const newMobile = e.target.value;
     setUserData(prev => ({
       ...prev,
-      mobile: e.target.value
+      mobile: newMobile
     }));
   };
 
@@ -146,21 +151,20 @@ export default function Profile() {
 
       const updatedAddresses = [...addresses, newAddressData];
 
-      const response = await fetch(`/api/users/${userId}/address`, {
+      const result = await makeRequest(`/${userId}/address`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
-        },
         body: JSON.stringify({ address: updatedAddresses }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update address');
+      // Update both userData and addresses states
+      if (result) {
+        setUserData(prev => ({
+          ...prev,
+          address: result.address || result.addresses
+        }));
+        setAddresses(result.address || result.addresses || updatedAddresses);
       }
 
-      const result = await response.json();
-      setAddresses(updatedAddresses);
       setIsAddingNewAddress(false);
       showToast('Address added successfully');
       e.target.reset();
@@ -176,24 +180,26 @@ export default function Profile() {
       const userId = user?._id || user?.id;
       if (!userId) throw new Error('User ID not found');
 
-      const response = await fetch(`/api/users/${userId}`, {
+      const result = await makeRequest(`/${userId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
-        },
         body: JSON.stringify({ mobile: userData?.mobile })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update mobile number');
+      if (result) {
+        // Update both local state and auth context
+        setUserData(result);
+        dispatch(setUser({ ...user, mobile: result.mobile })); // Update Redux store with mobile
+        
+        // Update local storage
+        const storedUser = JSON.parse(localStorage.getItem('userData') || '{}');
+        localStorage.setItem('userData', JSON.stringify({
+          ...storedUser,
+          mobile: result.mobile
+        }));
+        
+        setIsEditingMobile(false);
+        showToast('Mobile number updated successfully');
       }
-
-      const updatedUser = await response.json();
-      setUserData(updatedUser);
-      dispatch(setUser(updatedUser));
-      setIsEditingMobile(false);
-      showToast('Mobile number updated successfully');
     } catch (error) {
       console.error('Error updating mobile number:', error);
       showToast(error.message);
