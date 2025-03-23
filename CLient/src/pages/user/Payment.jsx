@@ -33,6 +33,42 @@ export default function Payment() {
   const subtotal = items?.reduce((sum, item) => sum + (item.product.price * item.quantity), 0) || 0;
   const total = subtotal + 50; // Assuming a default delivery charge
 
+  const createOrder = async (paymentResponse) => {
+    try {
+      const orderData = {
+        userId: user._id || user.id,
+        paymentId: paymentResponse.razorpay_payment_id,
+        items: items.map(item => ({
+          productId: item.product._id || item.product.id,
+          name: item.product.name,
+          price: item.product.price,
+          quantity: item.quantity,
+          size: item.size,
+          image: item.product.image
+        })),
+        shippingAddress: {
+          ...mergedData,
+        },
+        total: total,
+        status: 'confirmed',
+        paymentStatus: 'paid',
+        orderDate: new Date().toISOString()
+      };
+
+      console.log('Creating order with data:', orderData);
+
+      const orderResult = await makeRequest('/orders', {
+        method: 'POST',
+        body: JSON.stringify(orderData)
+      });
+
+      return orderResult;
+    } catch (error) {
+      console.error('Order creation error:', error);
+      throw error;
+    }
+  };
+
   const handlePayment = async () => {
     setIsLoading(true);
     if (!items?.length || !address || !user) {
@@ -44,7 +80,6 @@ export default function Payment() {
     try {
       setIsProcessing(true);
 
-      // Initialize Razorpay options
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID,
         amount: total * 100,
@@ -54,79 +89,71 @@ export default function Payment() {
         prefill: {
           name: user.name || "",
           email: user.email || "",
-          contact: user.phone || user.mobile || "" // Check for both phone and mobile
+          contact: user.phone || user.mobile || ""
         },
         theme: {
           color: "#000000"
         },
-        handler: async function (response) {
-          try {
-            // Prepare order details
-            const orderData = {
-              userId: user.id,
-              paymentId: response.razorpay_payment_id,
-              items: items.map(item => ({
-                productId: item.product.id,
-                name: item.product.name,
-                price: item.product.price,
-                quantity: item.quantity,
-                size: item.size
-              })),
-              shippingAddress: {
-                ...mergedData,
-              },
-              total: total,
-              status: 'confirmed', // Add order status
-              paymentStatus: 'paid', // Add payment status
-              orderDate: new Date().toISOString() // Add order date
-            };
+        handler: function (response) {
+          // Handle the payment success synchronously first
+          console.log('Payment successful:', response);
+          showToast('Payment successful! Creating your order...');
 
-            // Send order details to backend
-            const orderResponse = await fetch('/api/orders', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
-              },
-              body: JSON.stringify(orderData),
+          // Create order asynchronously
+          createOrder(response)
+            .then(orderResult => {
+              console.log('Order created successfully:', orderResult);
+              clearCart();
+              
+              // Navigate to success page
+              navigate('/user/order-success', { 
+                state: { 
+                  orderId: orderResult?._id || 'pending',
+                  orderDetails: orderResult || {
+                    paymentId: response.razorpay_payment_id,
+                    status: 'processing'
+                  }
+                }
+              });
+            })
+            .catch(error => {
+              console.error('Failed to create order:', error);
+              showToast('Payment successful but order creation failed. Our team will contact you.');
+              
+              // Store order details for recovery
+              localStorage.setItem('pendingOrder', JSON.stringify({
+                paymentId: response.razorpay_payment_id,
+                items,
+                address: mergedData,
+                total,
+                timestamp: new Date().toISOString()
+              }));
+
+              // Navigate to a fallback success page
+              navigate('/user/order-success', {
+                state: {
+                  orderId: 'pending',
+                  paymentId: response.razorpay_payment_id,
+                  status: 'processing'
+                }
+              });
             });
-
-            if (!orderResponse.ok) {
-              const errorData = await orderResponse.json();
-              throw new Error(errorData.message || 'Failed to create order');
-            }
-
-            const orderResult = await orderResponse.json();
-
-            // Clear cart and navigate to success page
-            clearCart();
-            showToast('Payment successful! Your order has been placed.');
-            navigate('/user/order-success', { 
-              state: { 
-                orderId: orderResult.orderId,
-                orderDetails: orderResult 
-              }
-            });
-
-          } catch (error) {
-            console.error('Order creation error:', error);
-            showToast('Failed to create order. Please contact support.');
-          }
         },
         modal: {
           ondismiss: function() {
             setIsProcessing(false);
             showToast('Payment cancelled');
-          }
+          },
+          escape: true,
+          backdropclose: false
         }
       };
 
-      // Create and open Razorpay payment window
       const razorpay = new window.Razorpay(options);
       razorpay.open();
 
     } catch (error) {
-      console.error('Payment error:', error);
+      console.error('Payment initialization error:', error);
       showToast('Payment failed. Please try again.');
       setIsProcessing(false);
     } finally {
