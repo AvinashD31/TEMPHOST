@@ -1,10 +1,14 @@
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL?.trim() || '';
 
-if (!API_URL || API_URL === window.location.origin) {
-  throw new Error('VITE_API_URL is incorrectly set to the client URL instead of the backend API URL');
+// Validate API URL
+if (!API_URL) {
+  console.error('VITE_API_URL is not set in environment variables');
 }
 
-console.log('API Base URL configured as:', API_URL);
+// Ensure API_URL doesn't end with /api and we add it consistently in the code
+const BASE_URL = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;
+
+console.log('API Base URL configured as:', BASE_URL);
 
 // Helper function to ensure endpoint starts with '/'
 const formatEndpoint = (endpoint) => {
@@ -16,8 +20,14 @@ const formatEndpoint = (endpoint) => {
 
 export const makeRequest = async (endpoint, options = {}) => {
   try {
-    const formattedEndpoint = formatEndpoint(endpoint);
-    const url = `${API_URL}${formattedEndpoint}`;
+    // Ensure endpoint starts with '/'
+    const sanitizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${BASE_URL}${sanitizedEndpoint}`;
+
+    if (import.meta.env.DEV) {
+      console.log('Making request to:', url);
+    }
+
     const token = sessionStorage.getItem('authToken');
 
     const defaultHeaders = {
@@ -33,14 +43,28 @@ export const makeRequest = async (endpoint, options = {}) => {
       },
     });
 
+    // Log the response details in development
+    if (import.meta.env.DEV) {
+      console.log('API Request:', {
+        url,
+        method: options.method || 'GET',
+        status: response.status,
+        statusText: response.statusText,
+      });
+    }
+
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Something went wrong');
+      throw new Error(error.message || `HTTP error! status: ${response.status}`);
     }
 
     return await response.json();
   } catch (error) {
-    console.error('API Request Error:', error);
+    console.error('API Request Error:', {
+      error: error.message,
+      endpoint,
+      baseUrl: BASE_URL,
+    });
     throw error;
   }
 };
